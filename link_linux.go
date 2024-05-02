@@ -1693,7 +1693,7 @@ func (h *Handle) linkModify(link Link, flags int) error {
 	case *Veth:
 		data := linkInfo.AddRtAttr(nl.IFLA_INFO_DATA, nil)
 		peer := data.AddRtAttr(nl.VETH_INFO_PEER, nil)
-		nl.NewIfInfomsgChild(peer, unix.AF_UNSPEC)
+		peerMsg := nl.NewIfInfomsgChild(peer, unix.AF_UNSPEC)
 		peer.AddRtAttr(unix.IFLA_IFNAME, nl.ZeroTerminated(link.PeerName))
 		if base.TxQLen >= 0 {
 			peer.AddRtAttr(unix.IFLA_TXQLEN, nl.Uint32Attr(uint32(base.TxQLen)))
@@ -1719,6 +1719,11 @@ func (h *Handle) linkModify(link Link, flags int) error {
 				val := nl.Uint32Attr(uint32(ns))
 				peer.AddRtAttr(unix.IFLA_NET_NS_FD, val)
 			}
+		}
+		// Add peer index
+		if link.PeerIndex > 0 {
+			// peer.AddRtAttr(unix.IFLA_NEW_IFINDEX, nl.Uint32Attr(uint32(link.PeerIndex)))
+			peerMsg.Index = int32(link.PeerIndex)
 		}
 	case *Vxlan:
 		addVxlanAttrs(link, linkInfo)

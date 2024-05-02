@@ -1341,7 +1341,7 @@ func TestLinkSetNs(t *testing.T) {
 	}
 	defer newns.Close()
 
-	link := &Veth{LinkAttrs{Name: "foo"}, "bar", nil, nil}
+	link := &Veth{LinkAttrs{Name: "foo"}, "bar", nil, nil, 0}
 	if err := LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -1412,7 +1412,7 @@ func TestVethPeerNs(t *testing.T) {
 	}
 	defer newns.Close()
 
-	link := &Veth{LinkAttrs{Name: "foo"}, "bar", nil, NsFd(basens)}
+	link := &Veth{LinkAttrs{Name: "foo"}, "bar", nil, NsFd(basens), 0}
 	if err := LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -1465,7 +1465,7 @@ func TestVethPeerNs2(t *testing.T) {
 	}
 	defer twons.Close()
 
-	link := &Veth{LinkAttrs{Name: "foo", Namespace: NsFd(onens)}, "bar", nil, NsFd(basens)}
+	link := &Veth{LinkAttrs{Name: "foo", Namespace: NsFd(onens)}, "bar", nil, NsFd(basens), 0}
 	if err := LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -2024,7 +2024,7 @@ func TestLinkSubscribe(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	link := &Veth{LinkAttrs{Name: "foo", TxQLen: testTxQLen, MTU: 1400}, "bar", nil, nil}
+	link := &Veth{LinkAttrs{Name: "foo", TxQLen: testTxQLen, MTU: 1400}, "bar", nil, nil, 0}
 	if err := LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -2071,7 +2071,7 @@ func TestLinkSubscribeWithOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	link := &Veth{LinkAttrs{Name: "foo", TxQLen: testTxQLen, MTU: 1400}, "bar", nil, nil}
+	link := &Veth{LinkAttrs{Name: "foo", TxQLen: testTxQLen, MTU: 1400}, "bar", nil, nil, 0}
 	if err := LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -2105,7 +2105,7 @@ func TestLinkSubscribeAt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	link := &Veth{LinkAttrs{Name: "test", TxQLen: testTxQLen, MTU: 1400}, "bar", nil, nil}
+	link := &Veth{LinkAttrs{Name: "test", TxQLen: testTxQLen, MTU: 1400}, "bar", nil, nil, 0}
 	if err := nh.LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -2147,7 +2147,7 @@ func TestLinkSubscribeListExisting(t *testing.T) {
 	}
 	defer nh.Close()
 
-	link := &Veth{LinkAttrs{Name: "test", TxQLen: testTxQLen, MTU: 1400}, "bar", nil, nil}
+	link := &Veth{LinkAttrs{Name: "test", TxQLen: testTxQLen, MTU: 1400}, "bar", nil, nil, 0}
 	if err := nh.LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
