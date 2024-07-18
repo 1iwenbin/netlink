@@ -2439,9 +2439,6 @@ func linkSubscribeAt(newNs, curNs netns.NsHandle, ch chan<- LinkUpdate, done <-c
 		for {
 			msgs, from, err := s.Receive()
 			if err != nil {
-				if err == syscall.EAGAIN {
-					continue
-				}
 				if cberr != nil {
 					cberr(fmt.Errorf("Receive failed: %v",
 						err))
@@ -2500,6 +2497,16 @@ func LinkSetGuard(link Link, mode bool) error {
 
 func (h *Handle) LinkSetGuard(link Link, mode bool) error {
 	return h.setProtinfoAttr(link, mode, nl.IFLA_BRPORT_GUARD)
+}
+
+// LinkSetBRSlaveGroupFwdMask set the group_fwd_mask of a bridge slave interface
+func LinkSetBRSlaveGroupFwdMask(link Link, mask uint16) error {
+	return pkgHandle.LinkSetBRSlaveGroupFwdMask(link, mask)
+}
+
+// LinkSetBRSlaveGroupFwdMask set the group_fwd_mask of a bridge slave interface
+func (h *Handle) LinkSetBRSlaveGroupFwdMask(link Link, mask uint16) error {
+	return h.setProtinfoAttrRawVal(link, nl.Uint16Attr(mask), nl.IFLA_BRPORT_GROUP_FWD_MASK)
 }
 
 func LinkSetFastLeave(link Link, mode bool) error {
@@ -2566,7 +2573,7 @@ func (h *Handle) LinkSetBrNeighSuppress(link Link, mode bool) error {
 	return h.setProtinfoAttr(link, mode, nl.IFLA_BRPORT_NEIGH_SUPPRESS)
 }
 
-func (h *Handle) setProtinfoAttr(link Link, mode bool, attr int) error {
+func (h *Handle) setProtinfoAttrRawVal(link Link, val []byte, attr int) error {
 	base := link.Attrs()
 	h.ensureIndex(base)
 	req := h.newNetlinkRequest(unix.RTM_SETLINK, unix.NLM_F_ACK)
@@ -2576,13 +2583,16 @@ func (h *Handle) setProtinfoAttr(link Link, mode bool, attr int) error {
 	req.AddData(msg)
 
 	br := nl.NewRtAttr(unix.IFLA_PROTINFO|unix.NLA_F_NESTED, nil)
-	br.AddRtAttr(attr, boolToByte(mode))
+	br.AddRtAttr(attr, val)
 	req.AddData(br)
 	_, err := req.Execute(unix.NETLINK_ROUTE, 0)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+func (h *Handle) setProtinfoAttr(link Link, mode bool, attr int) error {
+	return h.setProtinfoAttrRawVal(link, boolToByte(mode), attr)
 }
 
 // LinkSetTxQLen sets the transaction queue length for the link.
@@ -3549,6 +3559,9 @@ func addBridgeAttrs(bridge *Bridge, linkInfo *nl.RtAttr) {
 	if bridge.VlanDefaultPVID != nil {
 		data.AddRtAttr(nl.IFLA_BR_VLAN_DEFAULT_PVID, nl.Uint16Attr(*bridge.VlanDefaultPVID))
 	}
+	if bridge.GroupFwdMask != nil {
+		data.AddRtAttr(nl.IFLA_BR_GROUP_FWD_MASK, nl.Uint16Attr(*bridge.GroupFwdMask))
+	}
 }
 
 func parseBridgeData(bridge Link, data []syscall.NetlinkRouteAttr) {
@@ -3570,6 +3583,9 @@ func parseBridgeData(bridge Link, data []syscall.NetlinkRouteAttr) {
 		case nl.IFLA_BR_VLAN_DEFAULT_PVID:
 			vlanDefaultPVID := native.Uint16(datum.Value[0:2])
 			br.VlanDefaultPVID = &vlanDefaultPVID
+		case nl.IFLA_BR_GROUP_FWD_MASK:
+			mask := native.Uint16(datum.Value[0:2])
+			br.GroupFwdMask = &mask
 		}
 	}
 }

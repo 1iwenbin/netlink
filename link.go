@@ -274,6 +274,7 @@ type Bridge struct {
 	HelloTime         *uint32
 	VlanFiltering     *bool
 	VlanDefaultPVID   *uint16
+	GroupFwdMask      *uint16
 }
 
 func (bridge *Bridge) Attrs() *LinkAttrs {
@@ -753,6 +754,7 @@ const (
 	BOND_XMIT_HASH_POLICY_LAYER2_3
 	BOND_XMIT_HASH_POLICY_ENCAP2_3
 	BOND_XMIT_HASH_POLICY_ENCAP3_4
+	BOND_XMIT_HASH_POLICY_VLAN_SRCMAC
 	BOND_XMIT_HASH_POLICY_UNKNOWN
 )
 
@@ -762,6 +764,7 @@ var bondXmitHashPolicyToString = map[BondXmitHashPolicy]string{
 	BOND_XMIT_HASH_POLICY_LAYER2_3: "layer2+3",
 	BOND_XMIT_HASH_POLICY_ENCAP2_3: "encap2+3",
 	BOND_XMIT_HASH_POLICY_ENCAP3_4: "encap3+4",
+	BOND_XMIT_HASH_POLICY_VLAN_SRCMAC: "vlan+srcmac",
 }
 var StringToBondXmitHashPolicyMap = map[string]BondXmitHashPolicy{
 	"layer2":   BOND_XMIT_HASH_POLICY_LAYER2,
@@ -769,6 +772,7 @@ var StringToBondXmitHashPolicyMap = map[string]BondXmitHashPolicy{
 	"layer2+3": BOND_XMIT_HASH_POLICY_LAYER2_3,
 	"encap2+3": BOND_XMIT_HASH_POLICY_ENCAP2_3,
 	"encap3+4": BOND_XMIT_HASH_POLICY_ENCAP3_4,
+	"vlan+srcmac": BOND_XMIT_HASH_POLICY_VLAN_SRCMAC,
 }
 
 // BondLacpRate type
