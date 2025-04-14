@@ -80,6 +80,17 @@ func testLinkAddDel(t *testing.T, link Link) {
 			if resultPrimary.Mode != inputPrimary.Mode {
 				t.Fatalf("Mode is %d, should be %d", int(resultPrimary.Mode), int(inputPrimary.Mode))
 			}
+			if resultPrimary.SupportsScrub() && resultPrimary.Scrub != inputPrimary.Scrub {
+				t.Fatalf("Scrub is %d, should be %d", int(resultPrimary.Scrub), int(inputPrimary.Scrub))
+			}
+			if resultPrimary.SupportsScrub() && resultPrimary.PeerScrub != inputPrimary.PeerScrub {
+				t.Fatalf("Peer Scrub is %d, should be %d", int(resultPrimary.PeerScrub), int(inputPrimary.PeerScrub))
+			}
+			if inputPrimary.Mode == NETKIT_MODE_L2 && inputPrimary.HardwareAddr != nil {
+				if inputPrimary.HardwareAddr.String() != resultPrimary.HardwareAddr.String() {
+					t.Fatalf("Hardware address is %s, should be %s", resultPrimary.HardwareAddr.String(), inputPrimary.HardwareAddr.String())
+				}
+			}
 
 			if inputPrimary.peerLinkAttrs.Name != "" {
 				var resultPeer *Netkit
@@ -101,6 +112,20 @@ func testLinkAddDel(t *testing.T, link Link) {
 				}
 				if resultPrimary.IsPrimary() == resultPeer.IsPrimary() {
 					t.Fatalf("Both primary and peer device has the same value in IsPrimary() %t", resultPrimary.IsPrimary())
+				}
+				if resultPrimary.SupportsScrub() != resultPeer.SupportsScrub() {
+					t.Fatalf("Peer SupportsScrub() should return %v", resultPrimary.SupportsScrub())
+				}
+				if resultPrimary.PeerScrub != resultPeer.Scrub {
+					t.Fatalf("Scrub from peer is %d, should be %d", int(resultPeer.Scrub), int(resultPrimary.PeerScrub))
+				}
+				if resultPrimary.Scrub != resultPeer.PeerScrub {
+					t.Fatalf("PeerScrub from peer is %d, should be %d", int(resultPeer.PeerScrub), int(resultPrimary.Scrub))
+				}
+				if inputPrimary.Mode == NETKIT_MODE_L2 && inputPrimary.peerLinkAttrs.HardwareAddr != nil {
+					if inputPrimary.peerLinkAttrs.HardwareAddr.String() != resultPeer.HardwareAddr.String() {
+						t.Fatalf("Peer hardware address is %s, should be %s", resultPeer.HardwareAddr.String(), inputPrimary.peerLinkAttrs.HardwareAddr.String())
+					}
 				}
 			}
 		}
@@ -201,6 +226,16 @@ func testLinkAddDel(t *testing.T, link Link) {
 		if macv.Mode != other.Mode {
 			t.Fatalf("Got unexpected mode: %d, expected: %d", other.Mode, macv.Mode)
 		}
+		if other.BCQueueLen > 0 || other.UsedBCQueueLen > 0 {
+			if other.UsedBCQueueLen < other.BCQueueLen {
+				t.Fatalf("UsedBCQueueLen (%d) is smaller than BCQueueLen (%d)", other.UsedBCQueueLen, other.BCQueueLen)
+			}
+		}
+		if macv.BCQueueLen > 0 {
+			if macv.BCQueueLen != other.BCQueueLen {
+				t.Fatalf("BCQueueLen not set correctly: %d, expected: %d", other.BCQueueLen, macv.BCQueueLen)
+			}
+		}
 	}
 
 	if macv, ok := link.(*Macvtap); ok {
@@ -210,6 +245,16 @@ func testLinkAddDel(t *testing.T, link Link) {
 		}
 		if macv.Mode != other.Mode {
 			t.Fatalf("Got unexpected mode: %d, expected: %d", other.Mode, macv.Mode)
+		}
+		if other.BCQueueLen > 0 || other.UsedBCQueueLen > 0 {
+			if other.UsedBCQueueLen < other.BCQueueLen {
+				t.Fatalf("UsedBCQueueLen (%d) is smaller than BCQueueLen (%d)", other.UsedBCQueueLen, other.BCQueueLen)
+			}
+		}
+		if macv.BCQueueLen > 0 {
+			if macv.BCQueueLen != other.BCQueueLen {
+				t.Fatalf("BCQueueLen not set correctly: %d, expected: %d", other.BCQueueLen, macv.BCQueueLen)
+			}
 		}
 	}
 
@@ -605,8 +650,28 @@ func compareTuntap(t *testing.T, expected, actual *Tuntap) {
 		t.Fatal("Tuntap.Group doesn't match")
 	}
 
+	if expected.Flags&TUNTAP_NO_PI != actual.Flags&TUNTAP_NO_PI {
+		t.Fatal("Tuntap.NoPI doesn't match")
+	}
+
+	if expected.Flags&TUNTAP_VNET_HDR != actual.Flags&TUNTAP_VNET_HDR {
+		t.Fatal("Tuntap.VNetHdr doesn't match")
+	}
+
 	if expected.NonPersist != actual.NonPersist {
 		t.Fatal("Tuntap.Group doesn't match")
+	}
+
+	if expected.Flags&TUNTAP_MULTI_QUEUE != actual.Flags&TUNTAP_MULTI_QUEUE {
+		t.Fatal("Tuntap.MultiQueue doesn't match")
+	}
+
+	if expected.Queues != actual.Queues {
+		t.Fatal("Tuntap.Queues doesn't match")
+	}
+
+	if expected.DisabledQueues != actual.DisabledQueues {
+		t.Fatal("Tuntap.DisableQueues doesn't match")
 	}
 }
 
@@ -916,6 +981,36 @@ func TestLinkAddDelMacvtap(t *testing.T) {
 	}
 }
 
+func TestLinkMacvBCQueueLen(t *testing.T) {
+	minKernelRequired(t, 5, 11)
+
+	tearDown := setUpNetlinkTest(t)
+	defer tearDown()
+
+	parent := &Dummy{LinkAttrs{Name: "foo"}}
+	if err := LinkAdd(parent); err != nil {
+		t.Fatal(err)
+	}
+
+	testLinkAddDel(t, &Macvlan{
+		LinkAttrs:  LinkAttrs{Name: "bar", ParentIndex: parent.Attrs().Index},
+		Mode:       MACVLAN_MODE_PRIVATE,
+		BCQueueLen: 10000,
+	})
+
+	testLinkAddDel(t, &Macvtap{
+		Macvlan: Macvlan{
+			LinkAttrs:  LinkAttrs{Name: "bar", ParentIndex: parent.Attrs().Index},
+			Mode:       MACVLAN_MODE_PRIVATE,
+			BCQueueLen: 10000,
+		},
+	})
+
+	if err := LinkDel(parent); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestNetkitPeerNs(t *testing.T) {
 	minKernelRequired(t, 6, 7)
 	tearDown := setUpNetlinkTest(t)
@@ -996,14 +1091,18 @@ func TestLinkAddDelNetkit(t *testing.T) {
 
 	netkit := &Netkit{
 		LinkAttrs: LinkAttrs{
-			Name: "foo",
+			Name:         "foo",
+			HardwareAddr: net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
 		},
 		Mode:       NETKIT_MODE_L2,
 		Policy:     NETKIT_POLICY_FORWARD,
 		PeerPolicy: NETKIT_POLICY_BLACKHOLE,
+		Scrub:      NETKIT_SCRUB_DEFAULT,
+		PeerScrub:  NETKIT_SCRUB_NONE,
 	}
 	peerAttr := &LinkAttrs{
-		Name: "bar",
+		Name:         "bar",
+		HardwareAddr: net.HardwareAddr{0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB},
 	}
 	netkit.SetPeerAttrs(peerAttr)
 	testLinkAddDel(t, netkit)
@@ -2972,13 +3071,78 @@ func TestLinkAddDelTuntapMq(t *testing.T) {
 	testLinkAddDel(t, &Tuntap{
 		LinkAttrs: LinkAttrs{Name: "foo"},
 		Mode:      TUNTAP_MODE_TAP,
-		Queues:    4})
+		Queues:    4,
+		Flags:     TUNTAP_MULTI_QUEUE_DEFAULTS})
 
 	testLinkAddDel(t, &Tuntap{
 		LinkAttrs: LinkAttrs{Name: "foo"},
 		Mode:      TUNTAP_MODE_TAP,
 		Queues:    4,
 		Flags:     TUNTAP_MULTI_QUEUE_DEFAULTS | TUNTAP_VNET_HDR})
+
+	testLinkAddDel(t, &Tuntap{
+		LinkAttrs: LinkAttrs{Name: "foo"},
+		Mode:      TUNTAP_MODE_TAP,
+		Queues:    0,
+		Flags:     TUNTAP_MULTI_QUEUE_DEFAULTS | TUNTAP_VNET_HDR})
+}
+
+func TestTuntapPartialQueues(t *testing.T) {
+	tearDown := setUpNetlinkTest(t)
+	defer tearDown()
+
+	if err := syscall.Mount("sysfs", "/sys", "sysfs", syscall.MS_RDONLY, ""); err != nil {
+		t.Fatal("Cannot mount sysfs")
+	}
+
+	defer func() {
+		if err := syscall.Unmount("/sys", 0); err != nil {
+			t.Fatal("Cannot umount /sys")
+		}
+	}()
+
+	compare := func(expected *Tuntap) {
+		result, err := LinkByName(expected.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		other, ok := result.(*Tuntap)
+		if !ok {
+			t.Fatal("Result of create is not a tuntap")
+		}
+		compareTuntap(t, expected, other)
+	}
+
+	tap := &Tuntap{
+		LinkAttrs: LinkAttrs{Name: "foo"},
+		Mode:      TUNTAP_MODE_TAP,
+		Queues:    2,
+		Flags:     TUNTAP_MULTI_QUEUE_DEFAULTS | TUNTAP_VNET_HDR,
+	}
+
+	if err := LinkAdd(tap); err != nil {
+		t.Fatalf("Failed to add tap: %v", err)
+	}
+	defer cleanupFds(tap.Fds)
+
+	fds, err := tap.AddQueues(2)
+	if err != nil {
+		t.Fatalf("Failed to enable queues: %v", err)
+	}
+
+	compare(tap)
+
+	err = tap.RemoveQueues(fds...)
+	if err != nil {
+		t.Fatalf("Failed to close queues: %v", err)
+	}
+
+	compare(tap)
+
+	if err = LinkDel(tap); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLinkAddDelTuntapOwnerGroup(t *testing.T) {
@@ -3202,6 +3366,108 @@ func TestLinkSetBondSlave(t *testing.T) {
 
 	if slaveTwoLink.Attrs().MasterIndex != bondLink.Attrs().Index {
 		t.Errorf("For %s expected %s to be master", slaveTwoLink.Attrs().Name, bondLink.Attrs().Name)
+	}
+}
+
+func testFailover(t *testing.T, slaveName, bondName string) {
+	slaveLink, err := LinkByName(slaveName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bondLink, err := LinkByName(bondName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = LinkSetBondSlaveActive(slaveLink, &Bond{LinkAttrs: *bondLink.Attrs()})
+	if err != nil {
+		t.Errorf("set slave link active failed: %v", err)
+		return
+	}
+
+	bondLink, err = LinkByName(bondName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bond := bondLink.(*Bond)
+	if bond.ActiveSlave != slaveLink.Attrs().Index {
+		t.Errorf("the current active slave %d is not expected as %d", bond.ActiveSlave, slaveLink.Attrs().Index)
+	}
+}
+
+func TestLinkFailover(t *testing.T) {
+	minKernelRequired(t, 3, 13)
+
+	tearDown := setUpNetlinkTest(t)
+	defer tearDown()
+
+	const (
+		bondName     = "foo"
+		slaveOneName = "fooFoo"
+		slaveTwoName = "fooBar"
+	)
+
+	bond := NewLinkBond(LinkAttrs{Name: bondName})
+	bond.Mode = StringToBondModeMap["active-backup"]
+	bond.Miimon = 100
+
+	if err := LinkAdd(bond); err != nil {
+		t.Fatal(err)
+	}
+
+	bondLink, err := LinkByName(bondName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer LinkDel(bondLink)
+
+	if err := LinkAdd(&Dummy{LinkAttrs{Name: slaveOneName}}); err != nil {
+		t.Fatal(err)
+	}
+
+	slaveOneLink, err := LinkByName(slaveOneName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer LinkDel(slaveOneLink)
+
+	if err := LinkAdd(&Dummy{LinkAttrs{Name: slaveTwoName}}); err != nil {
+		t.Fatal(err)
+	}
+	slaveTwoLink, err := LinkByName(slaveTwoName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer LinkDel(slaveTwoLink)
+
+	if err := LinkSetBondSlave(slaveOneLink, &Bond{LinkAttrs: *bondLink.Attrs()}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := LinkSetBondSlave(slaveTwoLink, &Bond{LinkAttrs: *bondLink.Attrs()}); err != nil {
+		t.Fatal(err)
+	}
+
+	testFailover(t, slaveOneName, bondName)
+	testFailover(t, slaveTwoName, bondName)
+	testFailover(t, slaveTwoName, bondName)
+
+	// del slave from bond
+	slaveOneLink, err = LinkByName(slaveOneName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = LinkDelBondSlave(slaveOneLink, &Bond{LinkAttrs: *bondLink.Attrs()})
+	if err != nil {
+		t.Errorf("Remove slave %s from bond failed: %v", slaveOneName, err)
+	}
+	slaveOneLink, err = LinkByName(slaveOneName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slaveOneLink.Attrs().MasterIndex > 0 {
+		t.Errorf("The nic %s is still a slave of %d", slaveOneName, slaveOneLink.Attrs().MasterIndex)
 	}
 }
 

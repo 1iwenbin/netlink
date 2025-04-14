@@ -68,14 +68,12 @@ func TestIfSocketCloses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error on creating the socket: %v", err)
 	}
-	nlSock.SetReceiveTimeout(&unix.Timeval{Sec: 2, Usec: 0})
 	endCh := make(chan error)
 	go func(sk *NetlinkSocket, endCh chan error) {
 		endCh <- nil
 		for {
 			_, _, err := sk.Receive()
-			// Receive returned because of a timeout and the FD == -1 means that the socket got closed
-			if err == unix.EAGAIN && nlSock.GetFd() == -1 {
+			if err == unix.EAGAIN {
 				endCh <- err
 				return
 			}
@@ -96,6 +94,69 @@ func TestIfSocketCloses(t *testing.T) {
 	msg := <-endCh
 	if msg == nil {
 		t.Fatalf("Expected error instead received nil")
+	}
+}
+
+func TestReceiveTimeout(t *testing.T) {
+	nlSock, err := getNetlinkSocket(unix.NETLINK_ROUTE)
+	if err != nil {
+		t.Fatalf("Error creating the socket: %v", err)
+	}
+	// Even if the test fails because the timeout doesn't work, closing the
+	// socket at the end of the test should result in an EAGAIN (as long as
+	// TestIfSocketCloses completed, otherwise this test will leak the
+	// goroutines running the Receive).
+	defer nlSock.Close()
+	const failAfter = time.Second
+
+	tests := []struct {
+		name    string
+		timeout time.Duration
+	}{
+		{
+			name:    "1us timeout", // The smallest value accepted by Handle.SetSocketTimeout
+			timeout: time.Microsecond,
+		},
+		{
+			name:    "100ms timeout",
+			timeout: 100 * time.Millisecond,
+		},
+		{
+			name:    "500ms timeout",
+			timeout: 500 * time.Millisecond,
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			timeout := unix.NsecToTimeval(int64(tc.timeout))
+			nlSock.SetReceiveTimeout(&timeout)
+
+			doneC := make(chan time.Duration)
+			errC := make(chan error)
+			go func() {
+				start := time.Now()
+				_, _, err := nlSock.Receive()
+				dur := time.Since(start)
+				if err != unix.EAGAIN {
+					errC <- err
+					return
+				}
+				doneC <- dur
+			}()
+
+			failTimerC := time.After(failAfter)
+			select {
+			case dur := <-doneC:
+				if dur < tc.timeout || dur > (tc.timeout+(100*time.Millisecond)) {
+					t.Fatalf("Expected timeout %v got %v", tc.timeout, dur)
+				}
+			case err := <-errC:
+				t.Fatalf("Expected EAGAIN, but got: %v", err)
+			case <-failTimerC:
+				t.Fatalf("No timeout received")
+			}
+		})
 	}
 }
 
