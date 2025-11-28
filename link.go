@@ -29,6 +29,8 @@ type LinkAttrs struct {
 	HardwareAddr   net.HardwareAddr
 	Flags          net.Flags
 	RawFlags       uint32
+	Headroom       uint16      // Query only
+	Tailroom       uint16      // Query only
 	ParentIndex    int         // index of the parent link device
 	MasterIndex    int         // must be the index of a bridge
 	Namespace      interface{} // nil | NsPid | NsFd
@@ -290,8 +292,15 @@ func (bridge *Bridge) Type() string {
 // Vlan links have ParentIndex set in their Attrs()
 type Vlan struct {
 	LinkAttrs
-	VlanId       int
-	VlanProtocol VlanProtocol
+	VlanId        int
+	VlanProtocol  VlanProtocol
+	IngressQosMap map[uint32]uint32
+	EgressQosMap  map[uint32]uint32
+	ReorderHdr    *bool
+	Gvrp          *bool
+	LooseBinding  *bool
+	Mvrp          *bool
+	BridgeBinding *bool
 }
 
 func (vlan *Vlan) Attrs() *LinkAttrs {
@@ -398,14 +407,16 @@ func (n *Netkit) SetPeerAttrs(Attrs *LinkAttrs) {
 
 type Netkit struct {
 	LinkAttrs
-	Mode          NetkitMode
-	Policy        NetkitPolicy
-	PeerPolicy    NetkitPolicy
-	Scrub         NetkitScrub
-	PeerScrub     NetkitScrub
-	supportsScrub bool
-	isPrimary     bool
-	peerLinkAttrs LinkAttrs
+	Mode            NetkitMode
+	Policy          NetkitPolicy
+	PeerPolicy      NetkitPolicy
+	Scrub           NetkitScrub
+	PeerScrub       NetkitScrub
+	DesiredHeadroom uint16 // Named due to presence of Headroom in LinkAttrs
+	DesiredTailroom uint16 // Named due to presence of Tailroom in LinkAttrs
+	supportsScrub   bool
+	isPrimary       bool
+	peerLinkAttrs   LinkAttrs
 }
 
 func (n *Netkit) Attrs() *LinkAttrs {
@@ -427,6 +438,17 @@ type Veth struct {
 	PeerHardwareAddr net.HardwareAddr
 	PeerNamespace    interface{}
 	PeerIndex        int
+	PeerTxQLen       int
+	PeerNumTxQueues  uint32
+	PeerNumRxQueues  uint32
+	PeerMTU          uint32
+}
+
+func NewVeth(attr LinkAttrs) *Veth {
+	return &Veth{
+		LinkAttrs:  attr,
+		PeerTxQLen: -1,
+	}
 }
 
 func (veth *Veth) Attrs() *LinkAttrs {
@@ -1060,6 +1082,8 @@ type Geneve struct {
 	FlowBased         bool
 	InnerProtoInherit bool
 	Df                GeneveDf
+	PortLow           int
+	PortHigh          int
 }
 
 func (geneve *Geneve) Attrs() *LinkAttrs {
@@ -1097,7 +1121,15 @@ type Gretap struct {
 	EncapFlags uint16
 	Link       uint32
 	FlowBased  bool
+	IgnoreDf   GretapIgnoreDf
 }
+
+type GretapIgnoreDf uint8
+
+const (
+	GRETAP_IGNORE_DF_FALSE = iota
+	GRETAP_IGNORE_DF_TRUE
+)
 
 func (gretap *Gretap) Attrs() *LinkAttrs {
 	return &gretap.LinkAttrs

@@ -2,8 +2,8 @@ package netlink
 
 import (
 	"bytes"
-	"io/ioutil"
 	"net"
+	"os"
 	"testing"
 
 	"github.com/vishvananda/netlink/nl"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestParseIpsetProtocolResult(t *testing.T) {
-	msgBytes, err := ioutil.ReadFile("testdata/ipset_protocol_result")
+	msgBytes, err := os.ReadFile("testdata/ipset_protocol_result")
 	if err != nil {
 		t.Fatalf("reading test fixture failed: %v", err)
 	}
@@ -23,7 +23,7 @@ func TestParseIpsetProtocolResult(t *testing.T) {
 }
 
 func TestParseIpsetListResult(t *testing.T) {
-	msgBytes, err := ioutil.ReadFile("testdata/ipset_list_result")
+	msgBytes, err := os.ReadFile("testdata/ipset_list_result")
 	if err != nil {
 		t.Fatalf("reading test fixture failed: %v", err)
 	}
@@ -88,8 +88,7 @@ func TestParseIpsetListResult(t *testing.T) {
 }
 
 func TestIpsetCreateListAddDelDestroy(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 	timeout := uint32(3)
 	err := IpsetCreate("my-test-ipset-1", "hash:ip", IpsetCreateOptions{
 		Replace:  true,
@@ -444,8 +443,7 @@ func TestIpsetCreateListAddDelDestroyWithTestCases(t *testing.T) {
 
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
-			tearDown := setUpNetlinkTest(t)
-			defer tearDown()
+			t.Cleanup(setUpNetlinkTest(t))
 
 			err := IpsetCreate(tC.setname, tC.typename, tC.options)
 			if err != nil {
@@ -615,8 +613,7 @@ func TestIpsetBitmapCreateListWithTestCases(t *testing.T) {
 
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
-			tearDown := setUpNetlinkTest(t)
-			defer tearDown()
+			t.Cleanup(setUpNetlinkTest(t))
 
 			err := IpsetCreate(tC.setname, tC.typename, tC.options)
 			if err != nil {
@@ -643,8 +640,7 @@ func TestIpsetBitmapCreateListWithTestCases(t *testing.T) {
 }
 
 func TestIpsetSwap(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	ipset1 := "my-test-ipset-swap-1"
 	ipset2 := "my-test-ipset-swap-2"
@@ -723,8 +719,7 @@ func nextIP(ip net.IP) {
 // TestIpsetMaxElements tests that we can create an ipset containing
 // 128k elements, which is double the default size (64k elements).
 func TestIpsetMaxElements(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	ipsetName := "my-test-ipset-max"
 	maxElements := uint32(128 << 10)
@@ -757,5 +752,78 @@ func TestIpsetMaxElements(t *testing.T) {
 	}
 	if len(result.Entries) != int(maxElements) {
 		t.Fatalf("expected '%d' entry be created, got '%d'", maxElements, len(result.Entries))
+	}
+}
+
+func TestIpsetDefaultRevision(t *testing.T) {
+	testCases := []struct {
+		desc             string
+		typename         string
+		options          IpsetCreateOptions
+		expectedRevision uint8
+	}{
+		{
+			desc:     "Type-hash:ip,port",
+			typename: "hash:ip,port",
+			options: IpsetCreateOptions{
+				Counters: true,
+				Comments: true,
+				Skbinfo:  false,
+			},
+			expectedRevision: 3,
+		},
+		{
+			desc:     "Type-hash:ip,port_nocomment",
+			typename: "hash:ip,port",
+			options: IpsetCreateOptions{
+				Counters: true,
+				Comments: false,
+				Skbinfo:  false,
+			},
+			expectedRevision: 2,
+		},
+		{
+			desc:     "Type-hash:ip,port_skbinfo",
+			typename: "hash:ip,port",
+			options: IpsetCreateOptions{
+				Counters: true,
+				Comments: false,
+				Skbinfo:  true,
+			},
+			expectedRevision: 5,
+		},
+		{
+			desc:     "Type-hash:ip,port,net",
+			typename: "hash:ip,port,net",
+			options: IpsetCreateOptions{
+				Counters: true,
+				Comments: false,
+				Skbinfo:  true,
+			},
+			expectedRevision: 7,
+		},
+		{
+			desc:     "Type-hash:net,port_baseline_revision_no_opts",
+			typename: "hash:net,port",
+			options: IpsetCreateOptions{
+				Counters: false,
+				Comments: false,
+				Skbinfo:  false,
+			},
+			expectedRevision: 2,
+		},
+	}
+
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+
+			cadtFlags := optionsToBitflag(tC.options)
+
+			defRev := getIpsetDefaultRevision(tC.typename, cadtFlags)
+
+			if defRev != tC.expectedRevision {
+				t.Fatalf("expected default revision of '%d', got '%d'", tC.expectedRevision, defRev)
+			}
+		})
 	}
 }

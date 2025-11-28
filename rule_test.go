@@ -13,7 +13,7 @@ import (
 
 func TestRuleAddDel(t *testing.T) {
 	skipUnlessRoot(t)
-	defer setUpNetlinkTest(t)()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	srcNet := &net.IPNet{IP: net.IPv4(172, 16, 0, 1), Mask: net.CIDRMask(16, 32)}
 	dstNet := &net.IPNet{IP: net.IPv4(172, 16, 1, 1), Mask: net.CIDRMask(24, 32)}
@@ -73,7 +73,6 @@ func TestRuleAddDel(t *testing.T) {
 
 func TestRuleListFiltered(t *testing.T) {
 	skipUnlessRoot(t)
-	defer setUpNetlinkTest(t)()
 
 	t.Run("IPv4", testRuleListFilteredIPv4)
 	t.Run("IPv6", testRuleListFilteredIPv6)
@@ -95,8 +94,6 @@ func testRuleListFilteredIPv6(t *testing.T) {
 }
 
 func runRuleListFiltered(t *testing.T, family int, srcNet, dstNet *net.IPNet) {
-	defaultRules, _ := RuleList(family)
-
 	tests := []struct {
 		name       string
 		ruleFilter *Rule
@@ -112,7 +109,11 @@ func runRuleListFiltered(t *testing.T, family int, srcNet, dstNet *net.IPNet) {
 			preRun:     func() *Rule { return nil },
 			postRun:    func(r *Rule) {},
 			setupWant: func(_ *Rule) ([]Rule, bool) {
-				return defaultRules, false
+				rules, err := RuleList(family)
+				if err != nil {
+					t.Fatalf("Failed to list rules: %v", err)
+				}
+				return rules, false
 			},
 		},
 		{
@@ -583,6 +584,7 @@ func runRuleListFiltered(t *testing.T, family int, srcNet, dstNet *net.IPNet) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Cleanup(setUpNetlinkTest(t))
 			rule := tt.preRun()
 			wantRules, wantErr := tt.setupWant(rule)
 

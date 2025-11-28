@@ -11,12 +11,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.22
+        go-version: 1.23
 
     - name: Kernel Modules
       run: ./.github/scripts/modprobe.sh
@@ -30,12 +30,12 @@ jobs:
     # on macOS, which helps catch missing build tags.
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.22
+        go-version: 1.23
           
     - name: Build
       run: go build ./...

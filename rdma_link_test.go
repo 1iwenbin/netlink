@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package netlink
@@ -204,4 +205,31 @@ func TestRdmaLinkAddAndDel(t *testing.T) {
 	}
 
 	checkPresence(linkName, false)
+}
+
+func TestRdmaLinkMetrics(t *testing.T) {
+	minKernelRequired(t, 5, 1)
+	setupRdmaKModule(t, "rdma_rxe")
+	if err := RdmaLinkAdd(t.Name(), "rxe", "lo"); err != nil {
+		t.Fatal(err)
+	}
+	link, err := RdmaLinkByName(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer RdmaLinkDel(t.Name())
+	resources, err := RdmaResourceList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, resource := range resources {
+		t.Logf("resource: %+v", resource)
+	}
+	stats, err := RdmaStatistic(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stat := range stats.RdmaPortStatistics {
+		t.Logf("stat: %+v", stat)
+	}
 }

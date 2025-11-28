@@ -5,7 +5,6 @@ package netlink
 
 import (
 	"net"
-	"os"
 	"runtime"
 	"strconv"
 	"testing"
@@ -17,8 +16,7 @@ import (
 )
 
 func TestRouteAddDel(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -155,8 +153,7 @@ func TestRouteAddDel(t *testing.T) {
 }
 
 func TestRoute6AddDel(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// create dummy interface
 	// IPv6 route added to loopback interface will be unreachable
@@ -192,7 +189,7 @@ func TestRoute6AddDel(t *testing.T) {
 		IP:   net.ParseIP("2001:db8::0"),
 		Mask: net.CIDRMask(64, 128),
 	}
-	route := Route{LinkIndex: link.Attrs().Index, Dst: dst}
+	route := Route{LinkIndex: link.Attrs().Index, Dst: dst, Expires: 10}
 	if err := RouteAdd(&route); err != nil {
 		t.Fatal(err)
 	}
@@ -202,6 +199,25 @@ func TestRoute6AddDel(t *testing.T) {
 	}
 	if len(routes) != nroutes+1 {
 		t.Fatal("Route not added properly")
+	}
+
+	// route expiry is supported by kernel 4.4+
+	k, m, err := KernelVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k > 4 || (k == 4 && m > 4) {
+		foundExpires := false
+		for _, route := range routes {
+			if route.Dst.IP.Equal(dst.IP) {
+				if route.Expires > 0 && route.Expires <= 10 {
+					foundExpires = true
+				}
+			}
+		}
+		if !foundExpires {
+			t.Fatal("Route 'expires' not set")
+		}
 	}
 
 	dstIP := net.ParseIP("2001:db8::1")
@@ -332,8 +348,7 @@ func TestRoute6AddDel(t *testing.T) {
 }
 
 func TestRouteChange(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -398,8 +413,7 @@ func TestRouteChange(t *testing.T) {
 }
 
 func TestRouteReplace(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -459,8 +473,7 @@ func TestRouteReplace(t *testing.T) {
 }
 
 func TestRouteAppend(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -523,8 +536,7 @@ func TestRouteAppend(t *testing.T) {
 }
 
 func TestRouteAddIncomplete(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -562,8 +574,7 @@ func expectRouteUpdate(ch <-chan RouteUpdate, t, f uint16, dst net.IP) bool {
 }
 
 func TestRouteSubscribe(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	ch := make(chan RouteUpdate)
 	done := make(chan struct{})
@@ -607,8 +618,7 @@ func TestRouteSubscribe(t *testing.T) {
 }
 
 func TestRouteSubscribeWithOptions(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	ch := make(chan RouteUpdate)
 	done := make(chan struct{})
@@ -796,8 +806,7 @@ func TestRouteSubscribeListExisting(t *testing.T) {
 }
 
 func TestRouteFilterAllTables(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -877,8 +886,7 @@ func TestRouteFilterAllTables(t *testing.T) {
 }
 
 func TestRouteFilterByFamily(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	const table int = 999
 
@@ -950,8 +958,7 @@ func TestRouteFilterByFamily(t *testing.T) {
 }
 
 func TestRouteFilterIterCanStop(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -1016,8 +1023,7 @@ func TestRouteFilterIterCanStop(t *testing.T) {
 }
 
 func BenchmarkRouteListFilteredNew(b *testing.B) {
-	tearDown := setUpNetlinkTest(b)
-	defer tearDown()
+	b.Cleanup(setUpNetlinkTest(b))
 
 	link, err := setUpRoutesBench(b)
 
@@ -1039,8 +1045,7 @@ func BenchmarkRouteListFilteredNew(b *testing.B) {
 }
 
 func BenchmarkRouteListIter(b *testing.B) {
-	tearDown := setUpNetlinkTest(b)
-	defer tearDown()
+	b.Cleanup(setUpNetlinkTest(b))
 
 	link, err := setUpRoutesBench(b)
 
@@ -1104,8 +1109,7 @@ func tableIDIn(ids []int, id int) bool {
 }
 
 func TestRouteExtraFields(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -1180,8 +1184,7 @@ func TestRouteExtraFields(t *testing.T) {
 }
 
 func TestRouteMultiPath(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -1357,8 +1360,7 @@ func TestRouteIifOption(t *testing.T) {
 }
 
 func TestRouteOifOption(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// setup two interfaces: eth0, eth1
 	err := LinkAdd(&Dummy{LinkAttrs{Name: "eth0"}})
@@ -1467,8 +1469,7 @@ func TestRouteOifOption(t *testing.T) {
 }
 
 func TestFilterDefaultRoute(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -1549,8 +1550,7 @@ func TestFilterDefaultRoute(t *testing.T) {
 }
 
 func TestMPLSRouteAddDel(t *testing.T) {
-	tearDown := setUpMPLSNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpMPLSNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -1601,8 +1601,7 @@ func TestIP6tnlRouteAddDel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -1921,6 +1920,9 @@ func TestSEG6LocalEqual(t *testing.T) {
 	var flags_end_dt6 [nl.SEG6_LOCAL_MAX]bool
 	flags_end_dt6[nl.SEG6_LOCAL_ACTION] = true
 	flags_end_dt6[nl.SEG6_LOCAL_TABLE] = true
+	var flags_end_dt46 [nl.SEG6_LOCAL_MAX]bool
+	flags_end_dt46[nl.SEG6_LOCAL_ACTION] = true
+	flags_end_dt46[nl.SEG6_LOCAL_VRFTABLE] = true
 	var flags_end_dt4 [nl.SEG6_LOCAL_MAX]bool
 	flags_end_dt4[nl.SEG6_LOCAL_ACTION] = true
 	flags_end_dt4[nl.SEG6_LOCAL_TABLE] = true
@@ -1975,6 +1977,11 @@ func TestSEG6LocalEqual(t *testing.T) {
 			Table:  40,
 		},
 		{
+			Flags:    flags_end_dt46,
+			Action:   nl.SEG6_LOCAL_ACTION_END_DT46,
+			VrfTable: 50,
+		},
+		{
 			Flags:    flags_end_b6,
 			Action:   nl.SEG6_LOCAL_ACTION_END_B6,
 			Segments: segs,
@@ -2008,19 +2015,26 @@ func TestSEG6LocalEqual(t *testing.T) {
 	}
 }
 func TestSEG6RouteAddDel(t *testing.T) {
-	if os.Getenv("CI") == "true" {
-		t.Skipf("Fails in CI with: route_test.go:*: Invalid Type. SEG6_IPTUN_MODE_INLINE routes not added properly")
-	}
-	// add/del routes with LWTUNNEL_SEG6 to/from loopback interface.
+	// add/del routes with LWTUNNEL_SEG6 to/from interface.
 	// Test both seg6 modes: encap (IPv4) & inline (IPv6).
-	tearDown := setUpSEG6NetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpSEG6NetlinkTest(t))
 
-	// get loopback interface and bring it up
-	link, err := LinkByName("lo")
+	// loopback doesn't work on recent kernels, so use a dummy
+	err := LinkAdd(&Dummy{LinkAttrs{Name: "dummy0"}})
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	link, err := LinkByName("dummy0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := LinkDel(link); err != nil {
+			t.Logf("failed to delete device: %v", err)
+		}
+	})
+
 	if err := LinkSetUp(link); err != nil {
 		t.Fatal(err)
 	}
@@ -2034,7 +2048,6 @@ func TestSEG6RouteAddDel(t *testing.T) {
 		Mask: net.CIDRMask(32, 32),
 	}
 	var s1, s2 []net.IP
-	s1 = append(s1, net.ParseIP("::")) // inline requires "::"
 	s1 = append(s1, net.ParseIP("fc00:a000::12"))
 	s1 = append(s1, net.ParseIP("fc00:a000::11"))
 	s2 = append(s2, net.ParseIP("fc00:a000::22"))
@@ -2054,7 +2067,9 @@ func TestSEG6RouteAddDel(t *testing.T) {
 		t.Fatal(err)
 	}
 	// SEG6_IPTUN_MODE_INLINE
-	routes, err := RouteList(link, FAMILY_V6)
+	// Kernel adds multiple routes so filter them
+	filtV6 := &Route{LinkIndex: link.Attrs().Index, Dst: dst1}
+	routes, err := RouteListFiltered(FAMILY_V6, filtV6, RT_FILTER_OIF|RT_FILTER_DST)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2067,7 +2082,9 @@ func TestSEG6RouteAddDel(t *testing.T) {
 		}
 	}
 	// SEG6_IPTUN_MODE_ENCAP
-	routes, err = RouteList(link, FAMILY_V4)
+	// Kernel adds multiple routes so filter them
+	filtV4 := &Route{LinkIndex: link.Attrs().Index, Dst: dst2}
+	routes, err = RouteListFiltered(FAMILY_V4, filtV4, RT_FILTER_OIF|RT_FILTER_DST)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2099,8 +2116,7 @@ func TestSEG6RouteAddDel(t *testing.T) {
 // add/del routes with LWTUNNEL_ENCAP_SEG6_LOCAL to/from dummy interface.
 func TestSEG6LocalRoute6AddDel(t *testing.T) {
 	minKernelRequired(t, 4, 14)
-	tearDown := setUpSEG6NetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpSEG6NetlinkTest(t))
 
 	// create dummy interface
 	// IPv6 route added to loopback interface will be unreachable
@@ -2230,8 +2246,7 @@ func TestMTURouteAddDel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -2284,8 +2299,7 @@ func TestMTULockRouteAddDel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// get loopback interface
 	link, err := LinkByName("lo")
@@ -2336,10 +2350,66 @@ func TestMTULockRouteAddDel(t *testing.T) {
 	}
 }
 
+func TestRtoMinLockRouteAddDel(t *testing.T) {
+	_, err := RouteList(nil, FAMILY_V4)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(setUpNetlinkTest(t))
+
+	// get loopback interface
+	link, err := LinkByName("lo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// bring the interface up
+	if err := LinkSetUp(link); err != nil {
+		t.Fatal(err)
+	}
+
+	// add a gateway route
+	dst := &net.IPNet{
+		IP:   net.IPv4(192, 168, 0, 0),
+		Mask: net.CIDRMask(24, 32),
+	}
+
+	route := Route{LinkIndex: link.Attrs().Index, Dst: dst, RtoMin: 40, RtoMinLock: true}
+	if err := RouteAdd(&route); err != nil {
+		t.Fatal(err)
+	}
+	routes, err := RouteList(link, FAMILY_V4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 1 {
+		t.Fatal("Route not added properly")
+	}
+
+	if route.RtoMin != routes[0].RtoMin {
+		t.Fatal("Route RtoMin not set properly")
+	}
+
+	if route.RtoMinLock != routes[0].RtoMinLock {
+		t.Fatal("Route RtoMin lock not set properly")
+	}
+
+	if err := RouteDel(&route); err != nil {
+		t.Fatal(err)
+	}
+	routes, err = RouteList(link, FAMILY_V4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 0 {
+		t.Fatal("Route not removed properly")
+	}
+}
+
 func TestRouteViaAddDel(t *testing.T) {
 	minKernelRequired(t, 5, 4)
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	_, err := RouteList(nil, FAMILY_V4)
 	if err != nil {
@@ -2403,8 +2473,7 @@ func TestRouteViaAddDel(t *testing.T) {
 }
 
 func TestRouteUIDOption(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// setup eth0 so that network is reachable
 	err := LinkAdd(&Dummy{LinkAttrs{Name: "eth0"}})
@@ -2499,8 +2568,7 @@ func TestRouteUIDOption(t *testing.T) {
 }
 
 func TestRouteFWMarkOption(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	// setup eth0 so that network is reachable
 	err := LinkAdd(&Dummy{LinkAttrs{Name: "eth0"}})
@@ -2644,8 +2712,7 @@ func TestRouteFWMarkOption(t *testing.T) {
 }
 
 func TestRouteGetFIBMatchOption(t *testing.T) {
-	tearDown := setUpNetlinkTest(t)
-	defer tearDown()
+	t.Cleanup(setUpNetlinkTest(t))
 
 	err := LinkAdd(&Dummy{LinkAttrs{Name: "eth0"}})
 	if err != nil {
@@ -2699,5 +2766,62 @@ func TestRouteGetFIBMatchOption(t *testing.T) {
 	flag := routes[0].ListFlags()[0]
 	if flag != "onlink" {
 		t.Fatalf("Unexpected flag %s returned", flag)
+	}
+}
+
+func TestRouteNHID(t *testing.T) {
+	t.Cleanup(setUpNetlinkTest(t))
+
+	// create dummy interface
+	if err := LinkAdd(&Dummy{LinkAttrs: LinkAttrs{Name: "dummy0"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// get dummy interface
+	link0, err := LinkByName("dummy0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// bring the interface up
+	if err = LinkSetUp(link0); err != nil {
+		t.Fatal(err)
+	}
+
+	// add a new IPv6 link-local nexthop
+	nh := &Nexthop{
+		ID:      1,
+		OIF:     uint32(link0.Attrs().Index),
+		Gateway: net.ParseIP("fe80::1"),
+	}
+	if err = NexthopAdd(nh); err != nil {
+		t.Fatal(err)
+	}
+
+	// IPv4 prefix with IPv6 link local nexthop
+	_, dst, err := net.ParseCIDR("10.0.0.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	route := Route{
+		Dst:  dst,
+		NHID: nh.ID,
+	}
+	if err = RouteAdd(&route); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure we can retrieve the route we just added
+	routes, err := RouteListFiltered(FAMILY_V4, &Route{Dst: dst}, RT_FILTER_DST)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("Expected 1 route, got %d", len(routes))
+	}
+
+	if routes[0].NHID != nh.ID {
+		t.Fatalf("Expected route NHID %d, got %d", nh.ID, routes[0].NHID)
 	}
 }
