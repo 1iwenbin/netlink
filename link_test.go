@@ -1789,7 +1789,7 @@ func TestLinkSetNs(t *testing.T) {
 	}
 	defer newns.Close()
 
-	link := &Veth{LinkAttrs: LinkAttrs{Name: "foo"}, PeerName: "bar", 0}
+	link := &Veth{LinkAttrs: LinkAttrs{Name: "foo"}, PeerName: "bar", PeerIndex: 0}
 	if err := LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -1858,7 +1858,7 @@ func TestVethPeerNs(t *testing.T) {
 	}
 	defer newns.Close()
 
-	link := &Veth{LinkAttrs: LinkAttrs{Name: "foo"}, PeerName: "bar", PeerNamespace: NsFd(basens), 0}
+	link := &Veth{LinkAttrs: LinkAttrs{Name: "foo"}, PeerName: "bar", PeerNamespace: NsFd(basens), PeerIndex: 0}
 	if err := LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -1910,7 +1910,7 @@ func TestVethPeerNs2(t *testing.T) {
 	}
 	defer twons.Close()
 
-	link := &Veth{LinkAttrs: LinkAttrs{Name: "foo", Namespace: NsFd(onens)}, PeerName: "bar", PeerNamespace: NsFd(basens), 0}
+	link := &Veth{LinkAttrs: LinkAttrs{Name: "foo", Namespace: NsFd(onens)}, PeerName: "bar", PeerNamespace: NsFd(basens), PeerIndex: 0}
 	if err := LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -2455,7 +2455,7 @@ func TestLinkSubscribe(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	link := &Veth{LinkAttrs: LinkAttrs{Name: "foo", TxQLen: testTxQLen, MTU: 1400}, PeerName: "bar", 0}
+	link := &Veth{LinkAttrs: LinkAttrs{Name: "foo", TxQLen: testTxQLen, MTU: 1400}, PeerName: "bar", PeerIndex: 0}
 	if err := LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -2501,7 +2501,7 @@ func TestLinkSubscribeWithOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	link := &Veth{LinkAttrs: LinkAttrs{Name: "foo", TxQLen: testTxQLen, MTU: 1400}, PeerName: "bar", 0}
+	link := &Veth{LinkAttrs: LinkAttrs{Name: "foo", TxQLen: testTxQLen, MTU: 1400}, PeerName: "bar", PeerIndex: 0}
 	if err := LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -2535,7 +2535,7 @@ func TestLinkSubscribeAt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	link := &Veth{LinkAttrs: LinkAttrs{Name: "test", TxQLen: testTxQLen, MTU: 1400}, PeerName: "bar", 0}
+	link := &Veth{LinkAttrs: LinkAttrs{Name: "test", TxQLen: testTxQLen, MTU: 1400}, PeerName: "bar", PeerIndex: 0}
 	if err := nh.LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
@@ -2577,7 +2577,7 @@ func TestLinkSubscribeListExisting(t *testing.T) {
 	}
 	defer nh.Close()
 
-	link := &Veth{LinkAttrs: LinkAttrs{Name: "test", TxQLen: testTxQLen, MTU: 1400}, PeerName: "bar", 0}
+	link := &Veth{LinkAttrs: LinkAttrs{Name: "test", TxQLen: testTxQLen, MTU: 1400}, PeerName: "bar", PeerIndex: 0}
 	if err := nh.LinkAdd(link); err != nil {
 		t.Fatal(err)
 	}
